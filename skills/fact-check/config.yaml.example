@@ -1,0 +1,27 @@
+# Fact-check skill — optional configuration
+# Copy to ~/.claude/skills/fact-check/config.yaml and edit. The skill reads
+# overrides from there if present; otherwise it uses the defaults below.
+#
+# Most users do not need this file. Only edit if you want non-default behavior.
+
+# Default mode when the skill runs.
+# - "online": uses WebSearch + WebFetch for verification (default).
+# - "offline": never reaches the web; verifies only against URLs declared in the doc.
+mode: online
+
+# Cap on candidate claims emitted by the extractor. Higher = slower run but fewer misses.
+# The extractor errs on the side of over-flagging, so 200 is plenty for a 40-slide deck.
+max_claims: 200
+
+# Output language for the report body.
+# - "auto": follow the document's detected language (default; report headers stay bilingual).
+# - "pt" or "en": force a single language for the body.
+output_language: auto
+
+# Maximum age (in months) before a source is flagged as old in the report's notes.
+# Not enforced by the MVP scoring, surfaced as a soft warning when filled.
+source_freshness_months_macro: 24
+source_freshness_months_market: 12
+
+# Directory for intermediate JSON artifacts. Defaults to /tmp/fact-check.
+work_dir: /tmp/fact-check

@@ -1,0 +1,38 @@
+{
+  "source": "fixtures/sample-deck.docx",
+  "kind": "docx",
+  "language_guess": "pt",
+  "blocks": [
+    {
+      "id": "p1",
+      "location": "paragraph 1 (under 'Cenário macro')",
+      "text": "O PIB brasileiro cresceu 3,4% em 2024 segundo o IBGE, acima da expectativa de 3,1% do mercado."
+    },
+    {
+      "id": "p2",
+      "location": "paragraph 4 (under 'Mercado de seguros')",
+      "text": "O mercado brasileiro de seguros movimentou R$ 412 bilhões em prêmios em 2024, crescimento de 12,4% segundo a SUSEP."
+    },
+    {
+      "id": "p3",
+      "location": "paragraph 7 (under 'Concorrência')",
+      "text": "A Itaú adquiriu a XPInvestimentos em 2023, consolidando sua posição em wealth management."
+    },
+    {
+      "id": "p4",
+      "location": "paragraph 9 (under 'Tendências globais')",
+      "text": "De acordo com a McKinsey, 73% dos CEOs globais consideram IA generativa prioridade estratégica para 2025."
+    },
+    {
+      "id": "p5",
+      "location": "paragraph 12 (under 'Mercado endereçável')",
+      "text": "Estimamos um TAM de US$ 38 bilhões para o segmento corporativo na região, com penetração atual abaixo de 15%."
+    },
+    {
+      "id": "p6",
+      "location": "paragraph 14",
+      "text": "A estratégia da concorrência parece frágil e existem oportunidades claras de diferenciação."
+    }
+  ],
+  "warnings": []
+}

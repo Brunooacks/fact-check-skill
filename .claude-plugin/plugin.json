@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "fact-check",
+  "version": "0.1.0",
+  "description": "Audita claims e fontes em materiais executivos (.docx/.pptx/.pdf/URL). Output bilíngue PT/EN — Confirmado / Contraditório / Fonte inacessível / Não verificável.",
+  "author": {
+    "name": "Bruno Oliveira",
+    "url": "https://github.com/Brunooacks"
+  },
+  "homepage": "https://github.com/Brunooacks/fact-check-skill",
+  "license": "MIT",
+  "keywords": [
+    "fact-check",
+    "audit",
+    "executive-materials",
+    "claims-verification",
+    "source-validation",
+    "bilingual",
+    "pt-br"
+  ]
+}

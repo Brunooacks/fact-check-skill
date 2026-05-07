@@ -1,0 +1,40 @@
+{
+  "skill_name": "fact-check",
+  "evals": [
+    {
+      "id": 1,
+      "name": "pt-deck-with-mixed-claims",
+      "prompt": "Audita esse deck que vou mandar pro board na sexta. Já passou pelo time mas alguém me alertou que pode ter número fora do lugar — preciso saber o que confiar antes de circular. Caminho: ~/.claude/skills/fact-check/fixtures/sample-deck.docx",
+      "expected_output": "Bilingual markdown report covering all numeric and attributed claims in the deck, with at least one row classified as contradictory (the SUSEP number is wrong) and at least one row as not_verifiable (claim with no source). Critical alerts section is non-empty.",
+      "files": ["fixtures/sample-deck.docx"]
+    },
+    {
+      "id": 2,
+      "name": "en-pdf-fact-check",
+      "prompt": "Can you fact-check this strategy memo for me? It's been reviewed once but I want a second pass on the citations before it goes out. /Users/boliveis/.claude/skills/fact-check/fixtures/strategy-memo.pdf",
+      "expected_output": "Bilingual report with English-body rows (since the document is in English). Every numerical claim with attribution is traced to its source. False citations are flagged contradictory or not_verifiable.",
+      "files": ["fixtures/strategy-memo.pdf"]
+    },
+    {
+      "id": 3,
+      "name": "url-fact-check",
+      "prompt": "Da uma olhada nesse blog post da concorrência e me diz o que dá pra confiar: https://example.com/some-strategy-blog",
+      "expected_output": "Report processes a URL input. Identifies declared sources (if any), runs verification, marks unsourced claims as not_verifiable. Methodology section notes URL ingestion.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "name": "offline-mode-confidential",
+      "prompt": "Quero auditar esse memo mas é CONFIDENCIAL — não pode rodar busca externa nenhuma. Só verifica contra as URLs que estão no próprio documento. ~/.claude/skills/fact-check/fixtures/confidential-memo.docx",
+      "expected_output": "Skill detects offline-mode request, skips WebSearch entirely. Only verifies against URLs declared inside the document. All other claims marked not_verifiable with note 'offline mode active'. Methodology section explicitly mentions offline mode.",
+      "files": ["fixtures/confidential-memo.docx"]
+    },
+    {
+      "id": 5,
+      "name": "no-fact-check-needed",
+      "prompt": "Pode resumir esse documento pra mim em 3 bullet points? ~/.claude/skills/fact-check/fixtures/sample-deck.docx",
+      "expected_output": "Skill should NOT trigger — this is a summarization request, not a fact-check request. Claude defers to normal workflow.",
+      "files": ["fixtures/sample-deck.docx"]
+    }
+  ]
+}
