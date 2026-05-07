@@ -22,6 +22,26 @@ Cada afirmação do documento ganha um veredicto:
 
 **O output é diagnóstico, não reescrita** — a skill diz onde olhar, você decide o que corrigir.
 
+### 📚 Trilha completa de fontes confrontadas
+
+Todo veredicto carrega o **link da fonte consultada + trecho citado**, e o relatório fecha com uma **bibliografia consolidada** listando cada URL acessada e quais afirmações se apoiaram nela:
+
+```
+## Fontes consultadas / Sources consulted
+
+[1] SUSEP — Estatísticas SES, exercício 2024
+    URL: https://www2.susep.gov.br/menuestatistica/SES/principal.aspx
+    Citada por: c-002
+    Trecho: "crescimento de 9,8% nos prêmios em 2024"
+
+[2] CNseg — Boletim de Conjuntura, jan/2025
+    URL: https://cnseg.org.br/conjuntura/boletim
+    Citada por: c-002          ◀── triangulação visível
+    Trecho: "setor encerrou 2024 com expansão próxima a 10%"
+```
+
+A skill também suporta **triangulação**: cada veredicto pode declarar uma fonte primária + N fontes adicionais que corroboram ou contradizem o claim. URLs aparecem clicáveis nos alertas críticos e na tabela completa (`[link] (+1)` indica fonte extra).
+
 ---
 
 ## 🚀 Instalação rápida
@@ -141,9 +161,21 @@ fact-check-skill/
 
 ## 🛣️ Roadmap
 
-- [x] **MVP:** `.docx`, `.pdf`, URL · 4 veredictos básicos · output bilíngue · modo offline
+- [x] **MVP (v0.1.0):** `.docx`, `.pdf`, URL · 4 veredictos básicos · output bilíngue · modo offline
+- [x] **v0.1.1:** bibliografia consolidada com URLs deduplicadas + triangulação multi-fonte por claim
 - [ ] **v1:** `.pptx` · taxonomia completa (8 veredictos + 5 alertas) · hierarquia configurável de fontes · output anotado inline
 - [ ] **v2:** pacote MCP portável · processamento em batch · dashboard de tendências
+
+## 📜 Changelog
+
+### v0.1.1 (atual)
+- ✨ Nova seção **Fontes consultadas / Sources consulted** ao final do relatório — bibliografia deduplicada com IDs das afirmações que citaram cada URL.
+- ✨ Suporte a **triangulação multi-fonte** via `additional_sources` em cada veredicto.
+- ✨ Campo `source_title` para rótulos legíveis (ex: "SUSEP — Estatísticas SES, 2024").
+- 🔒 URL passa a ser obrigatória mesmo em verdicts `not_verifiable` quando uma busca foi tentada — auditoria completa de tudo que foi confrontado.
+
+### v0.1.0
+- 🚀 Release inicial. Ingestão `.docx`/`.pdf`/URL, extração de claims numéricos e atribuídos, 4 veredictos, output bilíngue PT/EN.
 
 ---
 
