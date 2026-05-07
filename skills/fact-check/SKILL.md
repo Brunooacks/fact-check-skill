@@ -107,7 +107,15 @@ Iterate over the candidates. For each one:
 
    Stick to these four for MVP. The full taxonomy (Partial, Outdated, Confirmed-with-ressalva, etc.) is in references/verdicts.md but is not in scope yet.
 
-5. **Record evidence.** Always note: the URL you consulted, a short quote (under 15 words) showing what the source actually says, and a one-line explanation of your judgment.
+5. **Record evidence — this is non-negotiable.** Every verdict must carry the trail of what you consulted. The user's whole reason for running this skill is to know *where to go look*. A verdict with no link is uselessly opaque. Specifically:
+
+   - `consulted_url` — the **primary** source URL you actually opened. Required for `confirmed`, `contradictory`, `source_inaccessible`. For `not_verifiable`, fill in the best URL you tried even if it didn't pan out (so the user knows what was attempted) — leave null only if you ran zero searches.
+   - `evidence_quote` — a direct quote (under 15 words) from the consulted source showing what it actually says. Required for `confirmed` and `contradictory`. For `source_inaccessible`, leave empty and explain in `judgment`.
+   - `additional_sources` — optional list when you triangulated multiple sources. Each entry: `{"url": "...", "quote": "...", "title": "..."}`. Use this when the primary source is corroborated or contradicted by a second one — the report surfaces all of them.
+   - `source_title` — optional human-readable title of the source (e.g., "SUSEP — Estatísticas SES, exercício 2024"). Helps the reader recognize what the URL points to without clicking.
+   - `judgment` — one-line explanation of why you assigned this verdict.
+
+   The renderer aggregates all URLs across all verdicts into a "Fontes consultadas / References" section at the end of the report. If you skip the URL fields, that bibliography is empty and the report loses half its value.
 
 ### Stage 4 — Render the report
 
@@ -125,8 +133,16 @@ Once you've graded every candidate worth keeping, write your verdicts to `/tmp/f
       "verdict": "contradictory",
       "declared_source": "SUSEP",
       "consulted_url": "https://www.gov.br/susep/...",
+      "source_title": "SUSEP — Estatísticas SES, exercício 2024",
       "evidence_quote": "crescimento de 9,8% no exercício de 2024",
-      "judgment": "SUSEP reporta 9,8%, não 12,4%. Diferença material."
+      "additional_sources": [
+        {
+          "url": "https://www.cnseg.org.br/...",
+          "title": "CNseg — Boletim de Conjuntura, 2024",
+          "quote": "setor encerrou 2024 com expansão próxima a 10%"
+        }
+      ],
+      "judgment": "SUSEP reporta 9,8% e CNseg corrobora ~10%. Claim de 12,4% diverge de ambas as fontes oficiais."
     }
   ]
 }

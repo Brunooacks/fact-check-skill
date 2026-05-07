@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "fact-check",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Audita claims e fontes em materiais executivos (.docx/.pptx/.pdf/URL). Output bilíngue PT/EN — Confirmado / Contraditório / Fonte inacessível / Não verificável.",
   "author": {
     "name": "Bruno Oliveira",

@@ -37,11 +37,59 @@ def label_for(verdict: str) -> str:
     return f"{pt} / {en}"
 
 
+def collect_sources(verdicts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Aggregate all URLs consulted across all verdicts, deduped, with citing claim IDs."""
+    seen: dict[str, dict[str, Any]] = {}
+    for v in verdicts:
+        entries: list[dict[str, Any]] = []
+        primary = v.get("consulted_url")
+        if primary:
+            entries.append({
+                "url": primary,
+                "title": v.get("source_title") or v.get("declared_source"),
+                "quote": v.get("evidence_quote"),
+                "is_primary": True,
+            })
+        for extra in v.get("additional_sources", []) or []:
+            if not extra.get("url"):
+                continue
+            entries.append({
+                "url": extra["url"],
+                "title": extra.get("title"),
+                "quote": extra.get("quote"),
+                "is_primary": False,
+            })
+        for e in entries:
+            url = e["url"]
+            existing = seen.setdefault(url, {
+                "url": url,
+                "titles": set(),
+                "quotes": [],
+                "cited_by": [],
+            })
+            if e.get("title"):
+                existing["titles"].add(e["title"])
+            if e.get("quote") and e["quote"] not in existing["quotes"]:
+                existing["quotes"].append(e["quote"])
+            existing["cited_by"].append(v.get("id", "?"))
+    # Convert sets to sorted lists for deterministic output
+    return [
+        {
+            "url": s["url"],
+            "titles": sorted(s["titles"]),
+            "quotes": s["quotes"],
+            "cited_by": s["cited_by"],
+        }
+        for s in seen.values()
+    ]
+
+
 def render_markdown(payload: dict[str, Any]) -> str:
     source = payload.get("source", "(unknown)")
     verdicts = payload.get("verdicts", [])
     counts = Counter(v.get("verdict", "not_verifiable") for v in verdicts)
     total = len(verdicts)
+    sources_index = collect_sources(verdicts)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     lines: list[str] = []
@@ -81,10 +129,24 @@ def render_markdown(payload: dict[str, Any]) -> str:
             if v.get("declared_source"):
                 lines.append(f"**Fonte declarada / Declared source:** {v['declared_source']}")
             if v.get("consulted_url"):
-                lines.append(f"**URL consultada / URL consulted:** {v['consulted_url']}")
+                title = v.get("source_title")
+                title_str = f" — _{title}_" if title else ""
+                lines.append(f"**URL consultada / URL consulted:** [{v['consulted_url']}]({v['consulted_url']}){title_str}")
             if v.get("evidence_quote"):
                 lines.append(f"**Evidência / Evidence:** \"{v['evidence_quote']}\"")
+            extras = v.get("additional_sources") or []
+            if extras:
+                lines.append("")
+                lines.append("**Fontes adicionais consultadas / Additional sources:**")
+                for extra in extras:
+                    url = extra.get("url", "")
+                    title = extra.get("title", "")
+                    quote = extra.get("quote", "")
+                    title_part = f" — _{title}_" if title else ""
+                    quote_part = f' — "{quote}"' if quote else ""
+                    lines.append(f"  - [{url}]({url}){title_part}{quote_part}")
             if v.get("judgment"):
+                lines.append("")
                 lines.append(f"**Diagnóstico / Judgment:** {v['judgment']}")
             lines.append("")
     else:
@@ -99,17 +161,49 @@ def render_markdown(payload: dict[str, Any]) -> str:
     lines.append("| ID | Local / Location | Claim | Veredicto / Verdict | Fonte declarada / Declared source | URL | Evidência / Evidence |")
     lines.append("|---|---|---|---|---|---|---|")
     for v in verdicts:
+        url_cell = "—"
+        if v.get("consulted_url"):
+            extra_count = len(v.get("additional_sources") or [])
+            suffix = f" (+{extra_count})" if extra_count else ""
+            url_cell = f"[link]({v['consulted_url']}){suffix}"
         row = [
             v.get("id", ""),
             v.get("location", ""),
             _md_escape(_truncate(v.get("claim", ""), 220)),
             label_for(v.get("verdict", "")),
             _md_escape(v.get("declared_source") or "—"),
-            f"[link]({v['consulted_url']})" if v.get("consulted_url") else "—",
+            url_cell,
             _md_escape(_truncate(v.get("evidence_quote", "") or v.get("judgment", "") or "—", 180)),
         ]
         lines.append("| " + " | ".join(row) + " |")
     lines.append("")
+
+    # ---- Sources consulted (bibliography)
+    lines.append("## Fontes consultadas / Sources consulted")
+    lines.append("")
+    if sources_index:
+        lines.append(
+            "_Bibliografia consolidada — toda URL acessada durante a auditoria, "
+            "com os IDs das afirmações que se apoiaram nela. / "
+            "Consolidated bibliography — every URL accessed during the audit, "
+            "with the IDs of claims that relied on it._"
+        )
+        lines.append("")
+        for i, s in enumerate(sources_index, start=1):
+            title = " · ".join(s["titles"]) if s["titles"] else _short_url(s["url"])
+            cited = ", ".join(sorted(set(s["cited_by"])))
+            lines.append(f"**[{i}] {title}**")
+            lines.append(f"  - URL: <{s['url']}>")
+            lines.append(f"  - Citada por / Cited by: {cited}")
+            for q in s["quotes"]:
+                lines.append(f"  - Trecho / Excerpt: \"{q}\"")
+            lines.append("")
+    else:
+        lines.append(
+            "_Nenhuma URL externa foi consultada (modo offline ou nenhuma afirmação verificável). "
+            "/ No external URL was consulted (offline mode or no verifiable claims)._"
+        )
+        lines.append("")
 
     # ---- Methodology
     lines.append("## Metodologia / Methodology")
@@ -145,6 +239,20 @@ def _truncate(s: str, n: int) -> str:
 
 def _md_escape(s: str) -> str:
     return (s or "").replace("|", "\\|").replace("\n", " ").strip()
+
+
+def _short_url(url: str) -> str:
+    """Return a compact, human-readable label for a URL when no title is available."""
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(url)
+        host = parsed.netloc.replace("www.", "")
+        path = parsed.path.rstrip("/")
+        if path and len(path) < 60:
+            return f"{host}{path}"
+        return host or url
+    except Exception:
+        return url
 
 
 def main() -> None:
