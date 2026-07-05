@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+# Trilha de auditoria gerada em runtime (mantém a pasta, ignora os dumps).
+audit/*.jsonl
+audit/eval/

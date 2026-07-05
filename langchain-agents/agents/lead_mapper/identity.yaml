@@ -1,0 +1,27 @@
+name: lead-mapper-agent
+role: lead_opportunity_mapping
+description: >
+  Mapeia empresas que fazem uso intensivo de APIs de IA, enriquece os dados,
+  pontua o fit como prospect e gera oportunidades qualificadas para a Veltrix
+  Platform (governança de agentes).
+version: "0.1.0"
+owner: veltrix-labs
+contact: agents@veltrix.example
+risk_tier: medium
+capabilities:
+  - discover_ai_heavy_companies
+  - enrich_company
+  - score_prospect
+  - map_opportunities
+allowed_tools:
+  - discover_companies
+  - enrich_company
+  - score_prospect
+data_scopes:
+  - public_firmographics
+  - ai_usage_signals
+tags:
+  - sales
+  - lead-generation
+  - prospecting
+  - veltrix

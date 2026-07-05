@@ -1,0 +1,24 @@
+name: banking-benchmark-agent
+role: banking_product_benchmarking
+description: >
+  Compara produtos bancários (contas, crédito, cartões, investimentos) entre
+  instituições, calcula competitividade e produz um relatório de benchmark.
+version: "0.1.0"
+owner: veltrix-labs
+contact: agents@veltrix.example
+risk_tier: medium
+capabilities:
+  - fetch_market_products
+  - compute_competitiveness
+  - generate_benchmark_report
+allowed_tools:
+  - list_banking_products
+  - get_product_metrics
+  - benchmark_products
+data_scopes:
+  - public_market_rates
+  - internal_product_catalog
+tags:
+  - banking
+  - benchmarking
+  - competitive-intelligence

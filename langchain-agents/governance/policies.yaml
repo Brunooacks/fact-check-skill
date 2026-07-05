@@ -1,0 +1,14 @@
+# Políticas locais (fallback quando GOVERNANCE_URL não está configurado).
+# A plataforma real de governança substitui isto respondendo em /policy/evaluate.
+#
+# Regra: default é ALLOW. Além disso, toda ferramenta fora do `allowed_tools`
+# da identidade do agente é automaticamente negada (guardrail de identidade).
+#
+# Exemplos de regras deny (descomente para experimentar bloqueios):
+deny: []
+#   - action: "tool:export_pii"
+#     reason: "Exportação de PII exige aprovação humana"
+#   - action: "*"
+#     when:
+#       tool: "send_outbound_email"
+#     reason: "Envio externo desabilitado em ambiente de teste"

@@ -1,0 +1,32 @@
+# Cada agente é um worker (roda a tarefa, reporta à governança e encerra).
+# Suba um agente específico com:  docker compose run --rm banking-benchmark
+# Ou os dois de uma vez com:      docker compose up
+
+x-agent-base: &agent-base
+  build: .
+  env_file:
+    - .env
+  environment:
+    AUDIT_DIR: /data/audit
+  volumes:
+    # Trilha de auditoria persistida no host, para você inspecionar.
+    - ./audit:/data/audit
+  restart: "no"
+
+services:
+  banking-benchmark:
+    <<: *agent-base
+    container_name: banking-benchmark-agent
+    command: ["agents.banking_benchmark.worker", "--print"]
+
+  lead-mapper:
+    <<: *agent-base
+    container_name: lead-mapper-agent
+    command: ["agents.lead_mapper.worker", "--print"]
+
+  # Avaliação de desempenho e propósito dos dois agentes (scorecard).
+  #   docker compose run --rm evaluate
+  evaluate:
+    <<: *agent-base
+    container_name: agents-evaluate
+    command: ["core.evaluation", "--agent", "all"]
