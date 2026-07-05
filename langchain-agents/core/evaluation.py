@@ -25,6 +25,7 @@ from typing import Any, Dict, List
 AGENTS: Dict[str, str] = {
     "banking": "agents.banking_benchmark",
     "leads": "agents.lead_mapper",
+    "compliance": "agents.compliance_risk",
 }
 
 _UNSET = object()

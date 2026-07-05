@@ -35,19 +35,9 @@ class GovernanceCallbackHandler(BaseCallbackHandler):
             text = ""
         self.client.emit("llm.end", {"output": _clip(text)}, level="debug")
 
-    def on_tool_start(self, serialized, input_str, **kwargs):
-        name = (serialized or {}).get("name", "unknown")
-        # Guardrail: a ferramenta é avaliada pela política ANTES de rodar.
-        self.client.check_policy(
-            f"tool:{name}", {"tool": name, "input": _clip(input_str)}
-        )
-        self.client.emit("tool.start", {"tool": name, "input": _clip(input_str)})
-
-    def on_tool_end(self, output, **kwargs):
-        self.client.emit("tool.end", {"output": _clip(output)})
-
-    def on_tool_error(self, error, **kwargs):
-        self.client.emit("tool.error", {"error": _clip(error)}, level="error")
+    # Nota: os eventos tool.start/end/blocked são emitidos pelo policy-gate
+    # (core.worker._gate_tool), que também FAZ CUMPRIR a decisão de política
+    # antes de a ferramenta rodar. Aqui ficam apenas LLM e ações do agente.
 
     def on_agent_action(self, action, **kwargs):
         self.client.emit(

@@ -1,13 +1,17 @@
 # 🤖 LangChain Agents — para testar governança de agentes (Veltrix)
 
-Dois agentes **LangChain** com funções e responsabilidades distintas, cada um
+Três agentes **LangChain** com funções e responsabilidades distintas, cada um
 rodando como **worker/CLI** dentro de **Docker**, com uma camada de **identidade
-+ telemetria genérica** pronta para você plugar na **sua** plataforma de
-governança. Inclui um **harness de avaliação** que mede desempenho e propósito.
++ telemetria + guardrail de política** pronta para você plugar na **sua**
+plataforma de governança (ex.: Cohort). Inclui um **harness de avaliação** que
+mede desempenho e propósito.
 
 > A plataforma de governança **não** está incluída — o projeto expõe apenas o
 > ponto de integração (identidade + trilha de auditoria + policy hook via REST).
-> Você conecta a sua plataforma trocando uma env var (`GOVERNANCE_URL`).
+> Você conecta a sua plataforma trocando env vars (`GOVERNANCE_URL`, `GOV_*_PATH`).
+>
+> 📘 **Passo-a-passo completo (configurar, executar, avaliar, integrar ao Cohort):
+> [`docs/GUIA.md`](docs/GUIA.md).**
 
 ---
 
@@ -17,6 +21,7 @@ governança. Inclui um **harness de avaliação** que mede desempenho e propósi
 |---|---|---|
 | **banking-benchmark-agent** | `banking_product_benchmarking` | Compara produtos bancários entre instituições, calcula competitividade e recomenda a melhor opção. |
 | **lead-mapper-agent** | `lead_opportunity_mapping` | Mapeia empresas que usam muito APIs de IA, enriquece, pontua o fit e gera oportunidades quentes para a Veltrix. |
+| **compliance-risk-agent** | `agent_output_compliance_audit` | Audita as trilhas de execução dos outros agentes, detecta política negada / erro / PII e emite relatório de risco. |
 
 Cada agente tem uma **identidade declarativa** (`identity.yaml`): `agent_id`
 estável, papel, capacidades, `allowed_tools`, escopos de dados, nível de risco e
@@ -33,6 +38,7 @@ cp .env.example .env          # opcional: preencha ANTHROPIC_API_KEY e GOVERNANC
 # Um agente específico
 docker compose run --rm banking-benchmark
 docker compose run --rm lead-mapper
+docker compose run --rm compliance-risk
 
 # Tarefa customizada
 docker compose run --rm lead-mapper agents.lead_mapper.worker --print \
@@ -86,9 +92,21 @@ O cliente (`governance/client.py`) chama, se a URL estiver definida:
 | Cada passo (LLM, tool, ação, resultado) | `POST /agents/{id}/events` |
 | Heartbeat / encerramento | `POST /agents/{id}/heartbeat`, `/shutdown` |
 
+Rotas e auth são **configuráveis por env** (`GOV_*_PATH`, `GOV_AUTH_STYLE`, …)
+para casar com o contrato do Cohort sem tocar em código — ver
+[`docs/GUIA.md` §6](docs/GUIA.md). O **guardrail é efetivo**: se a política negar
+uma ferramenta, ela **não executa** (evento `tool.blocked` na trilha).
+
 Se a URL **não** estiver definida, tudo funciona local (auditoria em JSONL +
 política do `governance/policies.yaml`). Governança nunca derruba o agente,
 exceto em `GOVERNANCE_STRICT=true`.
+
+Antes de apontar pro Cohort, teste o "fio" com o mock incluído:
+
+```bash
+python scripts/mock_governance.py          # simula a plataforma e loga o que recebe
+GOVERNANCE_URL=http://localhost:9000 ./scripts/run_local.sh banking
+```
 
 ---
 
@@ -130,8 +148,12 @@ langchain-agents/
 │   └── evaluation.py          # harness de avaliação (scorecard)
 ├── agents/
 │   ├── banking_benchmark/     # identity.yaml · tools.py · worker.py · evals.py
-│   └── lead_mapper/           # identity.yaml · tools.py · worker.py · evals.py
-└── scripts/run_local.sh
+│   ├── lead_mapper/           # identity.yaml · tools.py · worker.py · evals.py
+│   └── compliance_risk/       # identity.yaml · tools.py · worker.py · evals.py
+├── docs/GUIA.md               # passo-a-passo + integração Cohort
+└── scripts/
+    ├── run_local.sh
+    └── mock_governance.py     # mock da plataforma (stdlib) p/ testar o "fio"
 ```
 
 ## Adaptando para dados reais

@@ -15,9 +15,9 @@ from typing import Callable, List, Sequence, Tuple
 
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.tools import BaseTool
+from langchain_core.tools import BaseTool, StructuredTool, ToolException
 
-from governance.callbacks import GovernanceCallbackHandler
+from governance.callbacks import GovernanceCallbackHandler, _clip
 from governance.client import GovernanceClient
 from governance.identity import AgentIdentity
 
@@ -25,6 +25,37 @@ from .llm import build_llm, is_stub
 
 # Um passo de plano determinístico: (nome_da_tool, kwargs_de_input)
 PlanStep = Tuple[str, dict]
+
+
+def _gate_tool(inner: BaseTool, client: GovernanceClient) -> StructuredTool:
+    """Envolve uma ferramenta com o guardrail de política.
+
+    Antes de executar, consulta a governança. Se negada, a ferramenta NÃO roda —
+    levanta ToolException. Também emite tool.start/end/blocked na trilha. É o
+    ponto único onde a política é FEITA CUMPRIR (não apenas registrada)."""
+    name = inner.name
+
+    def _run(**kwargs):
+        decision = client.check_policy(f"tool:{name}", {"tool": name, "input": _clip(kwargs)})
+        if not decision.allow:
+            client.emit("tool.blocked", {"tool": name, "reason": decision.reason}, level="warning")
+            raise ToolException(f"Política negou '{name}': {decision.reason}")
+        client.emit("tool.start", {"tool": name, "input": _clip(kwargs)})
+        try:
+            result = inner.invoke(kwargs)
+        except Exception as exc:  # noqa: BLE001
+            client.emit("tool.error", {"tool": name, "error": _clip(exc)}, level="error")
+            raise
+        client.emit("tool.end", {"tool": name, "output": _clip(result)})
+        return result
+
+    return StructuredTool(
+        name=name,
+        description=inner.description,
+        args_schema=inner.args_schema,
+        func=_run,
+        handle_tool_error=True,  # no caminho do LLM, a negação volta ao modelo
+    )
 
 
 class GovernedWorker:
@@ -37,7 +68,6 @@ class GovernedWorker:
         default_task: str,
     ) -> None:
         self.identity = AgentIdentity.from_yaml(identity_path)
-        self.tools = list(tools)
         self.system_prompt = system_prompt
         self.demo_plan = demo_plan
         self.default_task = default_task
@@ -45,6 +75,8 @@ class GovernedWorker:
         self.llm = build_llm()
         self.client = GovernanceClient(self.identity)
         self.handler = GovernanceCallbackHandler(self.client)
+        # Toda ferramenta passa a ser policy-gated (guardrail efetivo).
+        self.tools = [_gate_tool(t, self.client) for t in tools]
         self._tools_by_name = {t.name: t for t in self.tools}
 
     def tools_by_name(self) -> dict:
@@ -104,8 +136,12 @@ class GovernedWorker:
             tool = self._tools_by_name.get(tool_name)
             if tool is None:
                 continue
-            # tool.invoke com callbacks dispara on_tool_start/end → auditoria + policy.
-            output = tool.invoke(tool_input, config={"callbacks": [self.handler]})
+            # A tool é policy-gated: se a governança negar, ela levanta ToolException
+            # e NÃO executa — registramos o bloqueio e seguimos.
+            try:
+                output = tool.invoke(tool_input)
+            except ToolException as exc:
+                output = json.dumps({"blocked": True, "reason": str(exc)}, ensure_ascii=False)
             collected.append((tool_name, output))
         return self._synthesize(task, collected)
 

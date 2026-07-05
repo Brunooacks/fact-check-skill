@@ -1,16 +1,28 @@
-"""Cliente de governança genérico.
+"""Cliente de governança genérico e configurável.
 
-Não é acoplado a nenhuma plataforma específica. Ele:
+Não é acoplado a nenhuma plataforma. Ele:
 
-  1. Registra a identidade do agente (POST {GOVERNANCE_URL}/agents/register).
+  1. Registra a identidade do agente.
   2. Emite eventos de auditoria (tool calls, decisões, resultado) — cada evento
-     vai para a plataforma (se configurada) e SEMPRE para uma trilha local
-     em JSONL, de modo que a governança seja auditável mesmo offline.
-  3. Avalia políticas antes de uma ação (POST {GOVERNANCE_URL}/policy/evaluate),
-     com um fallback local via arquivo de políticas.
+     vai para a plataforma (se configurada) e SEMPRE para uma trilha local em
+     JSONL, de modo que a governança seja auditável mesmo offline.
+  3. Avalia políticas antes de uma ação, com fallback local via policies.yaml.
 
-Se GOVERNANCE_URL estiver vazio, tudo funciona localmente — ideal para plugar
-depois na SUA plataforma só trocando a env var.
+Para integrar a QUALQUER plataforma (ex.: Cohort), você não muda código — só
+define as env vars de rota/auth. Ver docs/GUIA.md, seção "Integração".
+
+Env relevantes:
+  GOVERNANCE_URL         base da plataforma (vazio = só local)
+  AGENT_CREDENTIAL       segredo de auth
+  GOV_AUTH_STYLE         bearer | header | query | none            (default bearer)
+  GOV_AUTH_HEADER        nome do header quando style=header/query  (default Authorization)
+  GOV_REGISTER_PATH      default /agents/register
+  GOV_EVENTS_PATH        default /agents/{agent_id}/events
+  GOV_POLICY_PATH        default /policy/evaluate
+  GOV_HEARTBEAT_PATH     default /agents/{agent_id}/heartbeat
+  GOV_SHUTDOWN_PATH      default /agents/{agent_id}/shutdown
+  GOV_TOKEN_FIELD        campo do token na resposta de registro     (default session_token)
+  GOV_POLICY_ALLOW_FIELD campo booleano de decisão na resposta      (default allow)
 """
 from __future__ import annotations
 
@@ -19,9 +31,10 @@ import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 import requests
+import yaml
 
 from .identity import AgentIdentity
 
@@ -31,7 +44,7 @@ class PolicyDecision:
     allow: bool
     reason: str = ""
 
-    def __bool__(self) -> bool:  # permite `if decision:`
+    def __bool__(self) -> bool:
         return self.allow
 
 
@@ -55,6 +68,19 @@ class GovernanceClient:
         self.strict = strict if strict is not None else _envbool("GOVERNANCE_STRICT")
         self.run_id = run_id or f"run-{identity.instance_id[:12]}"
 
+        # Rotas configuráveis (permitem apontar para o contrato do Cohort).
+        self.paths = {
+            "register": os.getenv("GOV_REGISTER_PATH", "/agents/register"),
+            "events": os.getenv("GOV_EVENTS_PATH", "/agents/{agent_id}/events"),
+            "policy": os.getenv("GOV_POLICY_PATH", "/policy/evaluate"),
+            "heartbeat": os.getenv("GOV_HEARTBEAT_PATH", "/agents/{agent_id}/heartbeat"),
+            "shutdown": os.getenv("GOV_SHUTDOWN_PATH", "/agents/{agent_id}/shutdown"),
+        }
+        self.auth_style = os.getenv("GOV_AUTH_STYLE", "bearer").lower()
+        self.auth_header = os.getenv("GOV_AUTH_HEADER", "Authorization")
+        self.token_field = os.getenv("GOV_TOKEN_FIELD", "session_token")
+        self.allow_field = os.getenv("GOV_POLICY_ALLOW_FIELD", "allow")
+
         audit_dir = audit_dir or os.getenv("AUDIT_DIR", "./audit")
         self._audit_path = Path(audit_dir) / f"{identity.agent_id}.jsonl"
         self._audit_path.parent.mkdir(parents=True, exist_ok=True)
@@ -62,27 +88,29 @@ class GovernanceClient:
         self._seq = 0
         self.session_token: Optional[str] = None
 
+    def _path(self, key: str) -> str:
+        return self.paths[key].format(agent_id=self.identity.agent_id, run_id=self.run_id)
+
     # ── ciclo de vida ────────────────────────────────────────────────
     def register(self) -> dict:
-        """Apresenta a identidade do agente à plataforma."""
         manifest = {
             **self.identity.to_manifest(),
             "run_id": self.run_id,
             "sdk": "governed-langchain/0.1",
         }
         self.emit("agent.register", {"manifest": manifest}, level="info")
-        resp = self._post("/agents/register", manifest)
+        resp = self._post(self._path("register"), manifest)
         if resp is not None:
-            self.session_token = resp.get("session_token") or resp.get("token")
+            self.session_token = resp.get(self.token_field) or resp.get("token")
         return resp or {"status": "local-only", "agent_id": self.identity.agent_id}
 
     def heartbeat(self, status: str = "healthy") -> None:
         self.emit("agent.heartbeat", {"status": status}, level="debug")
-        self._post(f"/agents/{self.identity.agent_id}/heartbeat", {"status": status})
+        self._post(self._path("heartbeat"), {"status": status})
 
     def shutdown(self, status: str = "completed") -> None:
         self.emit("agent.shutdown", {"status": status}, level="info")
-        self._post(f"/agents/{self.identity.agent_id}/shutdown", {"status": status})
+        self._post(self._path("shutdown"), {"status": status})
 
     # ── política / guardrails ────────────────────────────────────────
     def check_policy(self, action: str, context: Optional[dict] = None) -> PolicyDecision:
@@ -94,9 +122,9 @@ class GovernanceClient:
             "context": context,
             "risk_tier": self.identity.risk_tier,
         }
-        resp = self._post("/policy/evaluate", body)
-        if resp is not None and "allow" in resp:
-            decision = PolicyDecision(bool(resp["allow"]), resp.get("reason", ""))
+        resp = self._post(self._path("policy"), body)
+        if resp is not None and self.allow_field in resp:
+            decision = PolicyDecision(bool(resp[self.allow_field]), resp.get("reason", ""))
         else:
             decision = self._local_policy(action, context)
         self.emit(
@@ -109,12 +137,10 @@ class GovernanceClient:
         return decision
 
     def _local_policy(self, action: str, context: dict) -> PolicyDecision:
-        """Fallback: lê governance/policies.yaml (opcional). Default = allow."""
         pol_path = Path(__file__).parent / "policies.yaml"
         if not pol_path.exists():
             return PolicyDecision(True, "default-allow (sem política local)")
-        rules = yaml_safe_load(pol_path)
-        # Bloqueia ferramenta fora do allowlist da própria identidade.
+        rules = yaml.safe_load(pol_path.read_text(encoding="utf-8")) or {}
         tool = context.get("tool")
         if tool and self.identity.allowed_tools and tool not in self.identity.allowed_tools:
             return PolicyDecision(False, f"tool '{tool}' fora do allowlist da identidade")
@@ -137,27 +163,34 @@ class GovernanceClient:
             "level": level,
             "payload": payload,
         }
-        # Trilha local — sempre.
         with self._audit_path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
-        # Plataforma — best-effort.
-        self._post(f"/agents/{self.identity.agent_id}/events", record, audit=False)
+        self._post(self._path("events"), record, audit=False)
 
     # ── transporte ───────────────────────────────────────────────────
+    def _auth(self, headers: dict, params: dict) -> None:
+        if not self.api_key or self.auth_style == "none":
+            return
+        if self.auth_style == "bearer":
+            headers[self.auth_header] = f"Bearer {self.api_key}"
+        elif self.auth_style == "header":
+            headers[self.auth_header] = self.api_key
+        elif self.auth_style == "query":
+            params[self.auth_header] = self.api_key
+
     def _post(self, path: str, body: dict, audit: bool = True) -> Optional[dict]:
         if not self.base_url:
             return None
         headers = {"Content-Type": "application/json"}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+        params: dict = {}
+        self._auth(headers, params)
         url = f"{self.base_url}{path}"
         try:
-            r = requests.post(url, json=body, headers=headers, timeout=8)
+            r = requests.post(url, json=body, headers=headers, params=params, timeout=8)
             r.raise_for_status()
             return r.json() if r.content else {}
         except Exception as exc:  # noqa: BLE001 — governança nunca deve derrubar o agente
             if audit:
-                # Evita recursão: grava só na trilha local.
                 self._seq += 1
                 with self._audit_path.open("a", encoding="utf-8") as fh:
                     fh.write(json.dumps({
@@ -181,8 +214,3 @@ def _envbool(name: str) -> bool:
 def _matches(rule: dict, context: dict) -> bool:
     when = rule.get("when", {})
     return all(context.get(k) == v for k, v in when.items())
-
-
-def yaml_safe_load(path: Path) -> dict:
-    import yaml
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}

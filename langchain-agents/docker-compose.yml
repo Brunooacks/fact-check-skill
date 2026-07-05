@@ -24,7 +24,13 @@ services:
     container_name: lead-mapper-agent
     command: ["agents.lead_mapper.worker", "--print"]
 
-  # Avaliação de desempenho e propósito dos dois agentes (scorecard).
+  # Agente de compliance/risco — audita as trilhas dos outros agentes.
+  compliance-risk:
+    <<: *agent-base
+    container_name: compliance-risk-agent
+    command: ["agents.compliance_risk.worker", "--print"]
+
+  # Avaliação de desempenho e propósito dos três agentes (scorecard).
   #   docker compose run --rm evaluate
   evaluate:
     <<: *agent-base

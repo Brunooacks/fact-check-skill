@@ -1,0 +1,25 @@
+name: compliance-risk-agent
+role: agent_output_compliance_audit
+description: >
+  Audita a trilha de execução e as saídas dos outros agentes: detecta decisões
+  de política negadas, erros de runtime, possível vazamento de PII e uso de
+  ferramentas fora do escopo. Produz um relatório de compliance com nível de risco.
+version: "0.1.0"
+owner: veltrix-labs
+contact: agents@veltrix.example
+risk_tier: high
+capabilities:
+  - read_audit_trail
+  - assess_output_risk
+  - generate_compliance_report
+allowed_tools:
+  - read_audit_trail
+  - assess_output_risk
+  - generate_compliance_report
+data_scopes:
+  - agent_audit_trails
+tags:
+  - compliance
+  - risk
+  - governance
+  - auditing
